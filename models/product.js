@@ -26,6 +26,7 @@ module.exports = class Product {
   }
 
   save() {
+    this.id = Math.random().toString();
     getProductsFromFile((products) => {
       products.push(this);
       fs.writeFile(filePath, JSON.stringify(products), (err) => {
@@ -38,5 +39,12 @@ module.exports = class Product {
   //Becuase of static, we don't need to create a dummy object to call this fetchAll function like this, const prod = new Product('book1'); prod.fetchAll().
   static fetchAll(cb) {
     getProductsFromFile(cb);
+  }
+
+  static findById(id, cb) {
+    getProductsFromFile(products => {
+      const product = products.find(prod => prod.id === id);
+      cb(product);
+    })
   }
 };
