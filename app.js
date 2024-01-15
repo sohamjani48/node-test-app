@@ -4,17 +4,14 @@ const path = require("path");
 
 const app = express();
 
-// //Setting up **pug** engine
-// app.set("view engine", "pug");
-// app.set("views", "views");
-
-// //Setting up **ejs** engine
 app.set("view engine", "ejs");
 app.set("views", "views");
 
 const adminRoutes = require("./routes/admin.js");
 const shopRoutes = require("./routes/shop.js");
 const errorController = require("./controllers/errors.js");
+
+const sequelize = require("./util/database.js");
 
 app.use(bodyParser.urlencoded());
 
@@ -24,4 +21,10 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.use(errorController.get404);
 
-app.listen(4000);
+sequelize
+  .sync()
+  .then((result) => {
+    app.listen(4000);
+  })
+  .catch((err) => console.log(err));
+
