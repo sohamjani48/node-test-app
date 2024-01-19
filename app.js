@@ -16,6 +16,8 @@ const Product = require("./models/product.js");
 const User = require("./models/user.js");
 const Cart = require("./models/cart.js");
 const CartItem = require("./models/cart-item.js");
+const Order = require("./models/order.js");
+const OrderItem = require("./models/order-item.js");
 
 app.use(bodyParser.urlencoded());
 
@@ -40,6 +42,9 @@ User.hasOne(Cart);
 Cart.belongsTo(User);
 Cart.belongsToMany(Product, { through: CartItem }); //CartItem is the third table which stores the realted of both Cart and Prodcut
 Product.belongsToMany(Cart, { through: CartItem });
+Order.belongsTo(User);
+User.hasMany(Order);
+Order.belongsToMany(Product, { through: OrderItem });
 
 // setting force true to sync the changes een after the tables are already created
 sequelize
