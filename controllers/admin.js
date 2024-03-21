@@ -5,7 +5,6 @@ exports.getAddProduct = (req, res, next) => {
     pageTitle: "Add Product",
     path: "/admin/add-product",
     editing: false,
-    isAuthenticated: req.session.isLoggedIn,
   });
 };
 
@@ -50,7 +49,6 @@ exports.getEditProduct = (req, res, next) => {
         path: "/admin/edit-product",
         editing: editMode,
         product: fetchedProduct,
-        isAuthenticated: req.session.isLoggedIn,
       });
     })
     .catch((err) => console.log(err));
@@ -67,16 +65,25 @@ exports.postEditProduct = (req, res, next) => {
     .then((product) => {
       //here product is a mongoose object
       //save method will update
+      console.log(
+        "logxx product is",
+        product,
+        req.user,
+        product.userId !== req.user._id
+      );
+      if (product.userId.toString() !== req.user._id.toString()) {
+        return res.redirect("/");
+      }
       product.title = updatedTitle;
       product.price = updatedPrice;
       product.imageUrl = updatedImageUrl;
       product.description = updatedDesc;
-      return product.save();
+      return product.save().then((result) => {
+        console.log("UPDATED PRODUCT!");
+        res.redirect("/admin/products");
+      });
     })
-    .then((result) => {
-      console.log("UPDATED PRODUCT!");
-      res.redirect("/admin/products");
-    })
+
     .catch((err) => console.log(err));
 };
 
@@ -84,7 +91,7 @@ exports.getProducts = (req, res, next) => {
   //using populate will store the whole user in user attribute of product instead of just id
   //In select we will pass which attributes we need ans which we dont using minus(-)
   //Using populate we can also add which things we want, like name in the below example
-  Product.find()
+  Product.find({ userId: req.user._id })
     // .select("title price -_id")
     // .populate("userId", "name")
     .then((products) => {
@@ -92,7 +99,6 @@ exports.getProducts = (req, res, next) => {
         prods: products,
         pageTitle: "Admin Products",
         path: "/admin/products",
-        isAuthenticated: req.session.isLoggedIn,
       });
     })
     .catch((err) => console.log(err));
@@ -100,7 +106,7 @@ exports.getProducts = (req, res, next) => {
 
 exports.postDeleteProduct = (req, res, next) => {
   const prodId = req.body.productId;
-  Product.findByIdAndDelete(prodId)
+  Product.deleteOne({ _id: prodId, userId: req.user._id })
     .then((result) => {
       res.redirect("/admin/products");
     })
