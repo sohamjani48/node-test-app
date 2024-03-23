@@ -45,19 +45,7 @@ app.use(
 //after creating the session, we will add the csurf protection
 app.use(csurfProtection);
 app.use(flash());
-
-app.use((req, res, next) => {
-  if (req.session.user) {
-    User.findById(req.session.user._id)
-      .then((user) => {
-        req.user = user;
-        next();
-      })
-      .catch((err) => console.log(err));
-  } else {
-    return next();
-  }
-});
+app.use(express.static(path.join(__dirname, "public")));
 
 //middle ware to send some props like authentication and csrf token to every view
 app.use((req, res, next) => {
@@ -66,12 +54,44 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use((req, res, next) => {
+  if (req.session.user) {
+    User.findById(req.session.user._id)
+      .then((user) => {
+        if (!user) {
+          return next();
+        }
+        req.user = user;
+        next();
+      })
+      .catch((err) => {
+        //Inside of then/catch throw error doesn't work for rendering error page
+        //Inside then/catch/callbackPromise, we need to use next(new Error);
+        next(new Error(err));
+      });
+  } else {
+    return next();
+  }
+});
+
 app.use("/admin", adminRoutes);
 app.use(shopRoutes);
 app.use(authRoutes);
-app.use(express.static(path.join(__dirname, "public")));
+app.get("/500", errorController.get500);
 
 app.use(errorController.get404);
+
+//If we pass an error in next() then it will skip all other middlewares and use this error middleware we defined below.
+//If we have more than one error handling middleware then they'll get executed from top to bottom like normal middleware.
+
+//Error middleware
+app.use((error, req, res, next) => {
+  res.status(500).render("500", {
+    pageTitle: "Error!",
+    path: "/500",
+    isAuthenticated: req.session.isLoggedIn,
+  });
+});
 
 mongoose
   .connect(MONGODB_URI)
@@ -79,4 +99,8 @@ mongoose
     console.log("logxx connected to mongoDB");
     app.listen(4000);
   })
-  .catch((err) => console.log(err));
+  .catch((err) => {
+    const error = new Error(err);
+    error.httpStatusCode = 500;
+    return next(error);
+  });
