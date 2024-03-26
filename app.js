@@ -6,9 +6,11 @@ const session = require("express-session");
 const MongoDbStore = require("connect-mongodb-session")(session);
 const csurf = require("csurf");
 const flash = require("connect-flash");
+const multer = require("multer");
 
 const MONGODB_URI =
   "mongodb+srv://soham:srj13579@myfirstcluster.virlawt.mongodb.net/shop?retryWrites=true&w=majority";
+const supportedTypes = ["image/png", "image/jpeg", "image/jpg"];
 
 const app = express();
 const store = new MongoDbStore({
@@ -16,6 +18,21 @@ const store = new MongoDbStore({
   collection: "sessions",
 });
 const csurfProtection = csurf();
+const fileStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "images");
+  },
+  filename: (req, file, cb) => {
+    cb(null, file.originalname);
+  },
+});
+const fileFilter = (req, file, cb) => {
+  if (supportedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(null, false);
+  }
+};
 
 app.set("view engine", "ejs");
 app.set("views", "views");
@@ -30,6 +47,7 @@ const User = require("./models/mongoDbModels/user.js");
 // const mongoConnect = require("./util/database.js").mongoConnect;
 
 app.use(bodyParser.urlencoded());
+app.use(multer({ storage: fileStorage, fileFilter }).single("image"));
 
 // This app.js has mongodb setup
 
@@ -46,6 +64,7 @@ app.use(
 app.use(csurfProtection);
 app.use(flash());
 app.use(express.static(path.join(__dirname, "public")));
+app.use('/images', express.static(path.join(__dirname, "images")));
 
 //middle ware to send some props like authentication and csrf token to every view
 app.use((req, res, next) => {
@@ -85,13 +104,13 @@ app.use(errorController.get404);
 //If we have more than one error handling middleware then they'll get executed from top to bottom like normal middleware.
 
 //Error middleware
-app.use((error, req, res, next) => {
-  res.status(500).render("500", {
-    pageTitle: "Error!",
-    path: "/500",
-    isAuthenticated: req.session.isLoggedIn,
-  });
-});
+// app.use((error, req, res, next) => {
+//   res.status(500).render("500", {
+//     pageTitle: "Error!",
+//     path: "/500",
+//     isAuthenticated: req.session.isLoggedIn,
+//   });
+// });
 
 mongoose
   .connect(MONGODB_URI)
