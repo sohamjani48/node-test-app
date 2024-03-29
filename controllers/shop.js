@@ -3,6 +3,7 @@ const Order = require("../models/mongoDbModels/order");
 const fs = require("fs");
 const path = require("path");
 const PDFDocument = require("pdfkit");
+const stripe = require("stripe")("stripe_key");
 
 const ITEMS_PER_PAGE = 1;
 
@@ -32,9 +33,9 @@ exports.getProducts = (req, res, next) => {
         lastPage: Math.ceil(totalItems / ITEMS_PER_PAGE),
       });
     })
-      .catch((err) => {
-        console.log(err);
-      });
+    .catch((err) => {
+      console.log(err);
+    });
 };
 
 exports.getProduct = (req, res, next) => {
@@ -111,6 +112,89 @@ exports.getCart = (req, res, next) => {
     });
 };
 
+exports.getCheckout = (req, res, next) => {
+  let products;
+  let total = 0;
+  req.user
+    .populate("cart.items.productId")
+    .then((user) => {
+      products = user.cart.items;
+      products.forEach((item) => {
+        console.log("logxx item is", item);
+        total += item.quantity * item.productId.price;
+      });
+
+      return stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: products.map((p) => ({
+          quantity: p.quantity,
+          price_data: {
+            unit_amount: p.productId.price * 100,
+            currency: "usd",
+            product_data: {
+              name: p.productId.title,
+              description: p.productId.description,
+            },
+          },
+        })),
+        mode: "payment",
+        success_url:
+          req.protocol + "://" + req.get("host") + "/checkout/success",
+        cancel_url: req.protocol + "://" + req.get("host") + "/checkout/cancel",
+      });
+    })
+    .then((session) => {
+      res.render("shop/checkout", {
+        path: "/checkout",
+        pageTitle: "Checkout",
+        products: products,
+        totalSum: total,
+        sessionId: session.id,
+      });
+    })
+    .catch((err) => {
+      console.log(err);
+      const error = new Error(err);
+      error.httpStatusCode = 500;
+      return next(error);
+    });
+};
+
+exports.getCheckoutSuccess = (req, res, next) => {
+  req.user
+    .populate("cart.items.productId")
+    .then((user) => {
+      console.log("logxx cart items", user.cart.items);
+      const products = user.cart.items.map((prodItem) => {
+        return {
+          quantity: prodItem.quantity,
+          productData: { ...prodItem.productId._doc }, //in the populate above the product data is stored in productId key
+          //_doc is only to get the data which is required, not the metadata stored in product
+        };
+      });
+      const order = new Order({
+        user: {
+          email: req.user.email,
+          userId: req.user, //mongoose will pick only ID
+        },
+        products: products,
+      });
+      return order.save();
+    })
+    .then((result) => {
+      return req.user.clearCart();
+    })
+    .then(() => {
+      res.redirect("/orders");
+    })
+    .catch((err) => {
+      console.log(err);
+      const error = new Error(err);
+      error.httpStatusCode = 500;
+      return next(error);
+    });
+};
+
 exports.postCart = (req, res, next) => {
   const prodId = req.body.productId;
 
@@ -141,41 +225,6 @@ exports.postCartDeleteProduct = (req, res, next) => {
     .catch((err) => {
       console.log(err);
 
-      const error = new Error(err);
-      error.httpStatusCode = 500;
-      return next(error);
-    });
-};
-
-exports.postOrder = (req, res, next) => {
-  req.user
-    .populate("cart.items.productId")
-    .then((user) => {
-      console.log("logxx cart items", user.cart.items);
-      const products = user.cart.items.map((prodItem) => {
-        return {
-          quantity: prodItem.quantity,
-          productData: { ...prodItem.productId._doc }, //in the populate above the product data is stored in productId key
-          //_doc is only to get the data which is required, not the metadata stored in product
-        };
-      });
-      const order = new Order({
-        user: {
-          email: req.user.email,
-          userId: req.user, //mongoose will pick only ID
-        },
-        products: products,
-      });
-      return order.save();
-    })
-    .then((result) => {
-      return req.user.clearCart();
-    })
-    .then(() => {
-      res.redirect("/orders");
-    })
-    .catch((err) => {
-      console.log(err);
       const error = new Error(err);
       error.httpStatusCode = 500;
       return next(error);
